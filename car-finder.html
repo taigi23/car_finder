@@ -1,0 +1,205 @@
+<title>パーキングコンパス</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f1724">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<style>
+/* Layout: one-screen instrument — status strip, big compass arrow, readouts, action bar */
+:root{
+  --bg:#e9edf2; --panel:#ffffff; --fg:#141c28; --muted:#5b6778; --line:#cfd6df;
+  --sign:#1257c9; --sign-fg:#ffffff; --floor:#c27a00; --ok:#1a8a4f; --warn:#b23b2a;
+  --f-num:"Saira Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1724; --panel:#172234; --fg:#e8edf4; --muted:#8d9bb0; --line:#2a3850;
+  --sign:#4d8dff; --sign-fg:#06101f; --floor:#f2b53c; --ok:#4cc985; --warn:#ff7a66; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1724; --panel:#172234; --fg:#e8edf4; --muted:#8d9bb0; --line:#2a3850;
+  --sign:#4d8dff; --sign-fg:#06101f; --floor:#f2b53c; --ok:#4cc985; --warn:#ff7a66; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  -webkit-user-select:none;user-select:none}
+.app{max-width:440px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;gap:14px;padding-block:14px 18px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:.04em}
+.p{display:grid;place-items:center;width:30px;height:30px;border-radius:6px;background:var(--sign);color:var(--sign-fg);
+  font-family:var(--f-num);font-weight:700;font-size:22px}
+.badge{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.badge.live{border-color:var(--ok);color:var(--ok)}
+.badge.demo{border-color:var(--floor);color:var(--floor)}
+.dial{position:relative;flex:1;min-height:300px;display:grid;place-items:center}
+.ring{width:min(78vw,330px);aspect-ratio:1;max-width:100%;border-radius:50%;position:relative;
+  background:var(--panel);border:1px solid var(--line);display:grid;place-items:center}
+.ticks{position:absolute;inset:0;border-radius:50%;transition:transform .25s linear}
+.tick{position:absolute;left:50%;top:6px;width:2px;height:10px;margin-left:-1px;background:var(--line);transform-origin:50% calc(min(78vw,330px)/2 - 6px)}
+.tick.n{background:var(--warn);height:16px;width:3px}
+.nlabel{position:absolute;left:50%;top:22px;transform:translateX(-50%);font-family:var(--f-num);font-weight:700;color:var(--warn);font-size:15px}
+.arrow{width:62%;height:62%;transition:transform .2s ease-out;will-change:transform}
+.arrow path{fill:var(--sign)}
+.arrow.near path{fill:var(--ok)}
+.center-note{position:absolute;bottom:18%;font-size:12px;color:var(--muted)}
+.read{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cell{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+.lab{font-size:11px;letter-spacing:.08em;color:var(--muted)}
+.val{font-family:var(--f-num);font-weight:700;font-size:40px;line-height:1.05;font-variant-numeric:tabular-nums}
+.val small{font-size:18px;font-weight:500;margin-left:2px}
+.sub{font-size:12px;color:var(--muted);margin-top:2px}
+.floor .val{color:var(--floor)}
+.meta{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.actions{display:flex;gap:10px}
+button{font:inherit;font-weight:700;border-radius:10px;padding:14px 12px;border:1px solid var(--line);
+  background:var(--panel);color:var(--fg);cursor:pointer;flex:1}
+button.primary{background:var(--sign);border-color:var(--sign);color:var(--sign-fg)}
+button:focus-visible{outline:3px solid var(--floor);outline-offset:2px}
+.confirm{background:var(--panel);border:1px solid var(--warn);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.msg{font-size:13px;color:var(--warn);min-height:1em}
+@media (prefers-reduced-motion:reduce){.arrow,.ticks{transition:none}}
+</style>
+
+<div class="app">
+  <div class="top">
+    <div class="brand"><span class="p">P</span>パーキングコンパス</div>
+    <span id="badge" class="badge demo">デモ表示</span>
+  </div>
+
+  <div class="dial">
+    <div class="ring">
+      <div class="ticks" id="ticks"><span class="nlabel">N</span></div>
+      <svg class="arrow" id="arrow" viewBox="0 0 100 100" aria-label="クルマの方向">
+        <path d="M50 4 L84 74 L50 58 L16 74 Z"/>
+      </svg>
+      <div class="center-note" id="note">端末を水平に持ってください</div>
+    </div>
+  </div>
+
+  <div class="read">
+    <div class="cell"><div class="lab">距離</div><div class="val" id="dist">—</div><div class="sub" id="acc">精度 —</div></div>
+    <div class="cell floor"><div class="lab">高低差</div><div class="val" id="alt">—</div><div class="sub" id="floor">—</div></div>
+  </div>
+  <div class="meta"><span id="saved">例: B2駐車場 · 14:05 記録</span><span id="dir">方位 —</span></div>
+  <div class="msg" id="msg" role="status"></div>
+
+  <div class="confirm" id="confirm" hidden>
+    <div>記録した駐車位置を削除しますか？</div>
+    <div class="actions"><button id="cNo">戻る</button><button class="primary" id="cYes">削除する</button></div>
+  </div>
+
+  <div class="actions">
+    <button id="start">案内を開始</button>
+    <button class="primary" id="park">ここに駐車した</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const KEY="parking-compass-spot";
+  const $=id=>document.getElementById(id);
+  const ticks=$("ticks");
+  for(let i=0;i<72;i++){const t=document.createElement("span");t.className="tick"+(i===0?" n":"");t.style.transform="rotate("+(i*5)+"deg)";ticks.appendChild(t)}
+
+  let spot=null, here=null, heading=null, live=false, arrowAngle=0, dialAngle=0, watchId=null;
+  try{spot=JSON.parse(localStorage.getItem(KEY)||"null")}catch(e){}
+
+  const DEMO={spot:{lat:35.65858,lng:139.70159,alt:-6.2,t:Date.now()-3600e3,label:"例: B2駐車場"},here:{lat:35.65935,lng:139.70215,alt:2.1,acc:8}};
+
+  const rad=d=>d*Math.PI/180, deg=r=>r*180/Math.PI;
+  function distance(a,b){const R=6371000,dLat=rad(b.lat-a.lat),dLng=rad(b.lng-a.lng);
+    const h=Math.sin(dLat/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(h))}
+  function bearing(a,b){const y=Math.sin(rad(b.lng-a.lng))*Math.cos(rad(b.lat));
+    const x=Math.cos(rad(a.lat))*Math.sin(rad(b.lat))-Math.sin(rad(a.lat))*Math.cos(rad(b.lat))*Math.cos(rad(b.lng-a.lng));
+    return (deg(Math.atan2(y,x))+360)%360}
+  // shortest-path accumulation so the arrow never spins the long way round
+  function ease(cur,target){let d=((target-cur)%360+540)%360-180;return cur+d}
+  const dirName=b=>["北","北東","東","南東","南","南西","西","北西"][Math.round(b/45)%8];
+  const fmtTime=t=>{const d=new Date(t);return d.getHours()+":"+String(d.getMinutes()).padStart(2,"0")};
+
+  function render(){
+    const s=live?spot:(spot||DEMO.spot), h=live?here:DEMO.here;
+    $("badge").className="badge "+(live?"live":"demo");
+    $("badge").textContent=live?"案内中":"デモ表示";
+    $("saved").textContent=s?((s.label||"駐車位置")+" · "+fmtTime(s.t)+" 記録"):"駐車位置が未記録です";
+    if(!s||!h){$("dist").textContent="—";$("alt").textContent="—";$("floor").textContent="—";$("dir").textContent="方位 —";return}
+    const d=distance(h,s), b=bearing(h,s);
+    $("dist").innerHTML=d<1000?Math.round(d)+"<small>m</small>":(d/1000).toFixed(2)+"<small>km</small>";
+    $("acc").textContent="精度 ±"+Math.round(h.acc||0)+"m";
+    $("dir").textContent="方位 "+dirName(b)+" "+Math.round(b)+"°";
+    if(s.alt!=null&&h.alt!=null){
+      const diff=s.alt-h.alt, fl=Math.round(diff/3);
+      $("alt").innerHTML=(diff>0?"+":"")+diff.toFixed(1)+"<small>m</small>";
+      $("floor").textContent=fl===0?"ほぼ同じ階":("約"+Math.abs(fl)+"フロア"+(fl>0?"上":"下"));
+    }else{$("alt").textContent="—";$("floor").textContent="標高を取得できません"}
+    const near=d<=Math.max(10,h.acc||0);
+    $("arrow").classList.toggle("near",near);
+    $("note").textContent=near?"この周辺にあります":(heading==null?"コンパス未取得（北基準で表示）":"矢印の方向へ進んでください");
+    const hd=heading==null?0:heading;
+    arrowAngle=ease(arrowAngle,b-hd); dialAngle=ease(dialAngle,-hd);
+    $("arrow").style.transform="rotate("+arrowAngle+"deg)";
+    ticks.style.transform="rotate("+dialAngle+"deg)";
+  }
+
+  // demo: slowly sweep the simulated heading so the arrow behaviour is visible
+  let demoT=0;
+  function demoLoop(){if(live)return;demoT+=0.004;heading=(Math.sin(demoT)*70+360)%360;render();requestAnimationFrame(demoLoop)}
+
+  function onOrient(e){
+    let h=null;
+    if(typeof e.webkitCompassHeading==="number")h=e.webkitCompassHeading;
+    else if(e.absolute&&e.alpha!=null)h=(360-e.alpha)%360;
+    if(h==null)return;
+    const so=(screen.orientation&&screen.orientation.angle)||window.orientation||0;
+    heading=(h+so+360)%360; if(live)render();
+  }
+  async function enableCompass(){
+    try{
+      if(typeof DeviceOrientationEvent!=="undefined"&&typeof DeviceOrientationEvent.requestPermission==="function"){
+        const r=await DeviceOrientationEvent.requestPermission(); if(r!=="granted")throw 0;
+      }
+      window.addEventListener("deviceorientationabsolute",onOrient,true);
+      window.addEventListener("deviceorientation",onOrient,true);
+    }catch(e){$("msg").textContent="コンパスが使えません。矢印は北を上として表示します。"}
+  }
+  function watchPos(){
+    return new Promise((res,rej)=>{
+      if(!navigator.geolocation){rej(new Error("no-geo"));return}
+      let first=true;
+      watchId=navigator.geolocation.watchPosition(p=>{
+        here={lat:p.coords.latitude,lng:p.coords.longitude,alt:p.coords.altitude,acc:p.coords.accuracy};
+        if(first){first=false;res()} if(live)render();
+      },err=>{if(first){first=false;rej(err)}},{enableHighAccuracy:true,maximumAge:1000,timeout:15000});
+    });
+  }
+  async function goLive(){
+    $("msg").textContent="";
+    await enableCompass();
+    try{await watchPos();live=true;heading=null;render();return true}
+    catch(e){$("msg").textContent="位置情報を取得できません。ブラウザの位置情報の許可を確認してください。";return false}
+  }
+
+  $("start").addEventListener("click",async()=>{
+    if(!spot){$("msg").textContent="先に「ここに駐車した」で駐車位置を記録してください。";return}
+    await goLive();
+  });
+  $("park").addEventListener("click",async()=>{
+    if(spot){$("confirm").hidden=false;return}
+    if(!live&&!(await goLive()))return;
+    // average a few fixes for a steadier saved point
+    const pts=[here]; for(let i=0;i<3;i++){await new Promise(r=>setTimeout(r,700)); if(here)pts.push(here)}
+    const avg=k=>{const v=pts.map(p=>p[k]).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null};
+    spot={lat:avg("lat"),lng:avg("lng"),alt:avg("alt"),t:Date.now(),label:"駐車位置"};
+    try{localStorage.setItem(KEY,JSON.stringify(spot))}catch(e){}
+    $("msg").textContent="駐車位置を記録しました。";
+    $("park").textContent="記録を削除"; render();
+  });
+  $("cNo").addEventListener("click",()=>{$("confirm").hidden=true});
+  $("cYes").addEventListener("click",()=>{
+    spot=null; try{localStorage.removeItem(KEY)}catch(e){}
+    $("confirm").hidden=true; $("park").textContent="ここに駐車した"; $("msg").textContent="記録を削除しました。"; render();
+  });
+
+  if(spot)$("park").textContent="記録を削除";
+  render(); demoLoop();
+})();
+</script>
